@@ -26,9 +26,9 @@ services:
     networks:
       - cheftory_network
 
-  node_exporter:
+  node-exporter:
     image: prom/node-exporter:v1.8.2
-    container_name: node_exporter
+    container_name: node-exporter
     restart: unless-stopped
     expose:
       - "9100"
