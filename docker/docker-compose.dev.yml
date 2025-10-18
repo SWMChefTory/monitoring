@@ -66,9 +66,9 @@ services:
     networks:
       - cheftory_network
 
-  mysql_exporter:
+  mysql-exporter:
     image: prom/mysqld-exporter:v0.15.1
-    container_name: mysql_exporter
+    container_name: mysql-exporter
     restart: unless-stopped
     command:
       - "--mysqld.username=${DATABASE_USERNAME}:${DATABASE_PASSWORD}"
