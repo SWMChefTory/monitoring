@@ -1,0 +1,49 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['${PROMETHEUS_HOST}:${PROMETHEUS_PORT}']
+        labels:
+          app_name: 'prometheus'
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['${NODE_EXPORTER_HOST}:${NODE_EXPORTER_PORT}']
+        labels:
+          app_name: 'node_exporter'
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['${CADVISOR_HOST}:${CADVISOR_PORT}']
+        labels:
+          app_name: 'cadvisor'
+
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['${MYSQL_EXPORTER_HOST}:${MYSQL_EXPORTER_PORT}']
+        labels:
+          app_name: 'mysql'
+
+  - job_name: 'proxy-server'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['${PROXY_SERVER_HOST}:${PROXY_SERVER_PORT}']
+        labels:
+          app_name: 'proxy-server'
+
+  - job_name: 'ai-recipe-summary'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['${AI_RECIPE_SUMMARY_HOST}:${AI_RECIPE_SUMMARY_PORT}']
+        labels:
+          app_name: 'ai-recipe-summary'
+
+  - job_name: 'ai-voice-command'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['${AI_VOICE_COMMAND_HOST}:${AI_VOICE_COMMAND_PORT}']
+        labels:
+          app_name: 'ai-voice-command'

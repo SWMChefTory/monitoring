@@ -1,0 +1,117 @@
+version: "3.9"
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--web.enable-remote-write-receiver"
+      - "--enable-feature=native-histograms"
+    environment:
+      TZ: Asia/Seoul
+    networks:
+      - cheftory_network
+
+  node_exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node_exporter
+    restart: unless-stopped
+    expose:
+      - "9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    environment:
+      TZ: Asia/Seoul
+    networks:
+      - cheftory_network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    environment:
+      TZ: Asia/Seoul
+    networks:
+      - cheftory_network
+
+  mysql_exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: mysql_exporter
+    restart: unless-stopped
+    command:
+      - "--mysqld.username=${DATABASE_USERNAME}:${DATABASE_PASSWORD}"
+      - "--mysqld.address=${DATABASE_HOST}:${DATABASE_PORT}"
+    expose:
+      - "9104"
+    networks:
+      - cheftory_network
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      TZ: Asia/Seoul
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USERNAME}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - cheftory_network
+  k6:
+    image: grafana/k6:latest
+    container_name: k6
+    volumes:
+      - ./k6:/scripts
+    command: run -o experimental-prometheus-rw /scripts/stress.js
+    environment:
+      K6_PROMETHEUS_RW_SERVER_URL: http://${PROMETHEUS_HOST}:${PROMETHEUS_PORT}/api/v1/write
+      K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: true
+      K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),avg,min,max
+      TZ: Asia/Seoul
+    depends_on:
+      - prometheus
+    networks:
+      - cheftory_network
+
+
+volumes:
+  grafana-data:
+  prometheus-data:
+
+networks:
+  cheftory_network:
+    external: true
+    name: dev_cheftory_network
