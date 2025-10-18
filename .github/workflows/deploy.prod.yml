@@ -1,0 +1,142 @@
+name: Deploy Monitoring Stack to Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: SSH to EC2 and create folder
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p cheftory-monitoring
+            mkdir -p cheftory-monitoring/prometheus
+            mkdir -p cheftory-monitoring/grafana/provisioning/datasources
+            mkdir -p cheftory-monitoring/grafana/provisioning/dashboards
+            mkdir -p cheftory-monitoring/grafana/dashboards
+            mkdir -p cheftory-monitoring/k6
+
+      - name: Create .env on EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/cheftory-monitoring
+            cat <<EOF > .env
+            COMPOSE_PROJECT_NAME=cheftory
+            DATABASE_HOST=${{ secrets.DATABASE_HOST }}
+            DATABASE_PORT=${{ secrets.DATABASE_PORT }}
+            DATABASE_NAME=${{ secrets.DATABASE_NAME }}
+            DATABASE_USERNAME=${{ secrets.DATABASE_USERNAME }}
+            DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}
+            GRAFANA_USERNAME=${{ secrets.GRAFANA_USERNAME }}
+            GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}
+            PROMETHEUS_HOST=${{ secrets.PROMETHEUS_HOST }}
+            PROMETHEUS_PORT=${{ secrets.PROMETHEUS_PORT }}
+            NODE_EXPORTER_HOST=${{ secrets.NODE_EXPORTER_HOST }}
+            NODE_EXPORTER_PORT=${{ secrets.NODE_EXPORTER_PORT }}
+            CADVISOR_HOST=${{ secrets.CADVISOR_HOST }}
+            CADVISOR_PORT=${{ secrets.CADVISOR_PORT }}
+            MYSQL_EXPORTER_HOST=${{ secrets.MYSQL_EXPORTER_HOST }}
+            MYSQL_EXPORTER_PORT=${{ secrets.MYSQL_EXPORTER_PORT }}
+            PROXY_SERVER_HOST=${{ secrets.PROXY_SERVER_HOST }}
+            PROXY_SERVER_PORT=${{ secrets.PROXY_SERVER_PORT }}
+            AI_RECIPE_SUMMARY_HOST=${{ secrets.AI_RECIPE_SUMMARY_HOST }}
+            AI_RECIPE_SUMMARY_PORT=${{ secrets.AI_RECIPE_SUMMARY_PORT }}
+            AI_VOICE_COMMAND_HOST=${{ secrets.AI_VOICE_COMMAND_HOST }}
+            AI_VOICE_COMMAND_PORT=${{ secrets.AI_VOICE_COMMAND_PORT }}
+            EOF
+
+      - name: Copy docker-compose.prod.yml to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker/docker-compose.prod.yml"
+          target: "/home/ubuntu/cheftory-monitoring"
+          strip_components: 1
+
+      - name: Copy prometheus config to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "prometheus/prometheus.yml.template"
+          target: "/home/${{ secrets.EC2_USER }}/cheftory-monitoring"
+
+      - name: Copy prometheus entrypoint to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "prometheus/entrypoint.sh"
+          target: "/home/${{ secrets.EC2_USER }}/cheftory-monitoring"
+
+      - name: Copy grafana datasources to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "grafana/provisioning/datasources/*"
+          target: "/home/${{ secrets.EC2_USER }}/cheftory-monitoring"
+
+      - name: Copy grafana dashboards config to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "grafana/provisioning/dashboards/*"
+          target: "/home/${{ secrets.EC2_USER }}/cheftory-monitoring"
+
+      - name: Copy grafana dashboards to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "grafana/dashboards/*"
+          target: "/home/${{ secrets.EC2_USER }}/cheftory-monitoring"
+
+      - name: Copy k6 scripts to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "k6/*"
+          target: "/home/${{ secrets.EC2_USER }}/cheftory-monitoring"
+
+      - name: SSH to EC2 and deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd cheftory-monitoring
+
+            # 기존 컨테이너 정리
+            sudo docker-compose -f docker-compose.prod.yml down || true
+
+            # docker-compose 실행
+            sudo docker-compose -f docker-compose.prod.yml up -d
