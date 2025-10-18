@@ -7,8 +7,10 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:9090:9090"
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml.template:/etc/prometheus/prometheus.yml.template:ro
+      - ./prometheus/entrypoint.sh:/entrypoint.sh:ro
       - prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -19,6 +21,8 @@ services:
       - "--enable-feature=native-histograms"
     environment:
       TZ: Asia/Seoul
+    env_file:
+      - .env
     networks:
       - cheftory_network
 
@@ -39,6 +43,8 @@ services:
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     environment:
       TZ: Asia/Seoul
+    env_file:
+      - .env
     networks:
       - cheftory_network
 
@@ -55,6 +61,8 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     environment:
       TZ: Asia/Seoul
+    env_file:
+      - .env
     networks:
       - cheftory_network
 
@@ -67,6 +75,8 @@ services:
       - "--mysqld.address=${DATABASE_HOST}:${DATABASE_PORT}"
     expose:
       - "9104"
+    env_file:
+      - .env
     networks:
       - cheftory_network
 
@@ -88,6 +98,8 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+    env_file:
+      - .env
     networks:
       - cheftory_network
   k6:
@@ -101,6 +113,8 @@ services:
       K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: true
       K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),avg,min,max
       TZ: Asia/Seoul
+    env_file:
+      - .env
     depends_on:
       - prometheus
     networks:
